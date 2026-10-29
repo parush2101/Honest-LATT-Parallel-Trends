@@ -54,6 +54,11 @@ z = norm.ppf(0.975)
 
 
 def ar1_cov(s, rho, K):
+    """Generate K x K AR(1) covariance matrix with scale s and correlation rho.
+
+    AR(1) structure: Cov[i,j] = s^2 * rho^|i-j|
+    Creates exponentially decaying correlations typical of time-series data.
+    """
     idx = np.arange(K)
     return s**2 * rho ** np.abs(idx[:, None] - idx[None, :])
 
@@ -72,6 +77,11 @@ def build_augmented(bhat, omega, sel, c, G, npre, npost):
     cons = []
 
     def screen_row(g, e, sign):
+        """Construct one row of the constraint matrix A for the polyhedron.
+
+        The row enforces: sign * (bhat_pre_g(e) + omega_g(e)) <= 0 (or >= 0).
+        Operates on the augmented vector y = (bhat, omega).
+        """
         u = np.zeros(dim)
         u[g * K + e] = sign                 # bhat_pre_g(e)
         u[dimb + g * npre + e] = sign       # omega_g(e)
@@ -93,7 +103,36 @@ def build_augmented(bhat, omega, sel, c, G, npre, npost):
 
 
 def run(s, delta_pre, c, rho, gamma, npre, npost, n_reps, seed=20240719):
-    """One gamma. All cohorts clean in post (target = 1 for any selected set)."""
+    """Execute Theorem 1 simulation for a single gamma (randomization scale).
+
+    All cohorts clean in post, so the causal target = 1 for any selected set.
+
+    Parameters:
+    -----------
+    s : float
+        Standard deviation scale for AR(1) covariance.
+    delta_pre : array-like
+        Pre-trend differential effects by cohort; strong selection signal.
+    c : float
+        Selection threshold on noised pre-trends max(|bhat_pre + omega|).
+    rho : float
+        AR(1) correlation coefficient (0 < rho < 1).
+    gamma : float
+        Randomization noise scale: omega ~ N(0, gamma * Sigma_pre).
+        gamma=0 recovers race2; gamma->inf approaches naive z-interval.
+    npre : int
+        Number of pre-periods.
+    npost : int
+        Number of post-periods (selection target = mean post-trends).
+    n_reps : int
+        Number of Monte Carlo replications.
+    seed : int
+        Random seed for reproducibility.
+
+    Returns:
+    --------
+    dict : Aggregated coverage and length statistics across non-empty selections.
+    """
     rng = np.random.default_rng(seed)
     G = len(delta_pre)
     K = npre + npost
